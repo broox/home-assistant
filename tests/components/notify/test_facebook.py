@@ -2,7 +2,10 @@
 import unittest
 import requests_mock
 
+import json
+
 from six.moves.urllib import parse as urlparse
+from tests.common import load_fixture_path
 
 import homeassistant.components.notify.facebook as facebook
 
@@ -37,9 +40,8 @@ class TestFacebook(unittest.TestCase):
         }
         self.assertEqual(mock.last_request.json(), expected_body)
 
-        params = urlparse.parse_qs(mock.last_request.query)
         expected_params = {"access_token": ["page-access-token"]}
-        self.assertEqual(params, expected_params)
+        self.assertEqual(mock.last_request.qs, expected_params)
 
     @requests_mock.Mocker()
     def test_sending_multiple_messages(self, mock):
@@ -65,9 +67,8 @@ class TestFacebook(unittest.TestCase):
             }
             self.assertEqual(request.json(), expected_body)
 
-            params = urlparse.parse_qs(request.query)
             expected_params = {"access_token": ["page-access-token"]}
-            self.assertEqual(params, expected_params)
+            self.assertEqual(mock.last_request.qs, expected_params)
 
     @requests_mock.Mocker()
     def test_send_message_attachment(self, mock):
@@ -97,9 +98,50 @@ class TestFacebook(unittest.TestCase):
         }
         self.assertEqual(mock.last_request.json(), expected_body)
 
-        params = urlparse.parse_qs(mock.last_request.query)
         expected_params = {"access_token": ["page-access-token"]}
-        self.assertEqual(params, expected_params)
+        self.assertEqual(mock.last_request.qs, expected_params)
+
+    @requests_mock.Mocker()
+    def test_send_message_file(self, mock):
+        """Test sending a message with a local file."""
+        mock.register_uri(
+            requests_mock.POST,
+            facebook.BASE_URL,
+            status_code=200
+        )
+
+        message = "This will be thrown away."
+        filepath = load_fixture_path("image.png")
+        data = {
+            "attachment": {
+                "type": "image",
+                "payload": {"is_reusable": True}
+            },
+            "filepath": filepath
+        }
+        target = ["+15555551234"]
+
+        self.facebook.send_message(message=message, data=data, target=target)
+        self.assertTrue(mock.called)
+        self.assertEqual(mock.call_count, 1)
+
+        expected_body = {
+            "recipient": {"phone_number": target[0]},
+            "message": data,
+            "filedata": "@{};type=image/png".format(filepath)
+        }
+
+        form_data = urlparse.parse_qs(mock.last_request.text)
+        self.assertEqual(
+            json.loads(form_data["recipient"][0]), expected_body["recipient"]
+        )
+        self.assertEqual(
+            json.loads(form_data["message"][0]), expected_body["message"]
+        )
+        self.assertEqual(form_data["filedata"][0], expected_body["filedata"])
+
+        expected_params = {"access_token": ["page-access-token"]}
+        self.assertEqual(mock.last_request.qs, expected_params)
 
     @requests_mock.Mocker()
     def test_send_targetless_message(self, mock):

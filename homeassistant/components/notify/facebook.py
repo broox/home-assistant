@@ -7,6 +7,8 @@ https://home-assistant.io/components/notify.facebook/
 import logging
 
 from aiohttp.hdrs import CONTENT_TYPE
+import json
+import mimetypes
 import requests
 import voluptuous as vol
 
@@ -42,36 +44,55 @@ class FacebookNotificationService(BaseNotificationService):
         payload = {'access_token': self.page_access_token}
         targets = kwargs.get(ATTR_TARGET)
         data = kwargs.get(ATTR_DATA)
-
-        body_message = {"text": message}
-
-        if data is not None:
-            body_message.update(data)
-            # Only one of text or attachment can be specified
-            if 'attachment' in body_message:
-                body_message.pop('text')
+        body = {}
 
         if not targets:
-            _LOGGER.error("At least 1 target is required")
+            _LOGGER.error("At least 1 target recipient is required")
             return
+
+        # Only one of text or attachment can be specified
+        if data is None:
+            body['message'] = {'text': message}
+        else:
+            if 'filepath' in data:
+                file_path = data.pop('filepath')
+                file_type, _ = mimetypes.guess_type(file_path)
+                body['filedata'] =  '@{};type={}'.format(file_path, file_type)
+
+            body['message'] = data
+
+            if message:
+                _LOGGER.warn(
+                    "Facebook text ('{}') ignored. It cannot be sent in the "
+                    "same request as file data".format(message)
+                )
 
         for target in targets:
             # If the target starts with a "+", we suppose it's a phone number,
             # otherwise it's a user id.
             if target.startswith('+'):
-                recipient = {"phone_number": target}
+                recipient = {'phone_number': target}
             else:
-                recipient = {"id": target}
+                recipient = {'id': target}
 
-            body = {
-                "recipient": recipient,
-                "message": body_message
-            }
-            import json
-            resp = requests.post(BASE_URL, data=json.dumps(body),
+            body['recipient'] = recipient
+
+            if 'filedata' in body:
+                headers = None
+                post_data = {
+                    'recipient': json.dumps(body['recipient']),
+                    'message': json.dumps(body['message']),
+                    'filedata': body['filedata']
+                }
+            else:
+                headers = headers={CONTENT_TYPE: CONTENT_TYPE_JSON}
+                post_data = json.dumps(body)
+
+            resp = requests.post(BASE_URL, data=post_data,
                                  params=payload,
-                                 headers={CONTENT_TYPE: CONTENT_TYPE_JSON},
+                                 headers=headers,
                                  timeout=10)
+
             if resp.status_code != 200:
                 obj = resp.json()
                 error_message = obj['error']['message']

@@ -241,9 +241,14 @@ def fire_service_discovered(hass, service, info):
     })
 
 
+def load_fixture_path(filename):
+    """Return the full path of a fixture file."""
+    return os.path.join(os.path.dirname(__file__), 'fixtures', filename)
+
+
 def load_fixture(filename):
     """Load a fixture."""
-    path = os.path.join(os.path.dirname(__file__), 'fixtures', filename)
+    path = load_fixture_path(filename)
     with open(path) as fptr:
         return fptr.read()
 
