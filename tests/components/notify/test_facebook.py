@@ -4,8 +4,8 @@ import requests_mock
 
 import json
 
-from six.moves.urllib import parse as urlparse
 from tests.common import load_fixture_path
+from urllib.parse import parse_qs
 
 import homeassistant.components.notify.facebook as facebook
 
@@ -68,7 +68,7 @@ class TestFacebook(unittest.TestCase):
             self.assertEqual(request.json(), expected_body)
 
             expected_params = {"access_token": ["page-access-token"]}
-            self.assertEqual(mock.last_request.qs, expected_params)
+            self.assertEqual(request.qs, expected_params)
 
     @requests_mock.Mocker()
     def test_send_message_attachment(self, mock):
@@ -131,7 +131,7 @@ class TestFacebook(unittest.TestCase):
             "filedata": "@{};type=image/png".format(filepath)
         }
 
-        form_data = urlparse.parse_qs(mock.last_request.text)
+        form_data = parse_qs(mock.last_request.text)
         self.assertEqual(
             json.loads(form_data["recipient"][0]), expected_body["recipient"]
         )
