@@ -1,4 +1,4 @@
-"""The test for the Facebook notify module."""
+"""The tests for the Facebook notify module."""
 import unittest
 import requests_mock
 
@@ -130,6 +130,12 @@ class TestFacebook(unittest.TestCase):
             "message": data,
             "filedata": "@{};type=image/png".format(filepath)
         }
+
+        content_type = mock.last_request.headers.get('Content-Type')
+        self.assertIn("multipart/form-data;", content_type)
+
+        print(mock.last_request)
+        print(dir(mock.last_request))
 
         form_data = parse_qs(mock.last_request.text)
         self.assertEqual(

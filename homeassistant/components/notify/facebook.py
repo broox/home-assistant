@@ -7,8 +7,11 @@ https://home-assistant.io/components/notify.facebook/
 import logging
 
 from aiohttp.hdrs import CONTENT_TYPE
+from requests_toolbelt import MultipartEncoder
+
 import json
 import mimetypes
+import os
 import requests
 import voluptuous as vol
 
@@ -21,6 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_PAGE_ACCESS_TOKEN = 'page_access_token'
 BASE_URL = 'https://graph.facebook.com/v2.6/me/messages'
+TIMEOUT = 10
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_PAGE_ACCESS_TOKEN): cv.string,
@@ -41,7 +45,7 @@ class FacebookNotificationService(BaseNotificationService):
 
     def send_message(self, message="", **kwargs):
         """Send some message."""
-        payload = {'access_token': self.page_access_token}
+        params = {'access_token': self.page_access_token}
         targets = kwargs.get(ATTR_TARGET)
         data = kwargs.get(ATTR_DATA)
         body = {}
@@ -50,6 +54,8 @@ class FacebookNotificationService(BaseNotificationService):
             _LOGGER.error("At least 1 target recipient is required")
             return
 
+        _LOGGER.warn('data: {}'.format(data))
+
         # Only one of text or attachment can be specified
         if data is None:
             body['message'] = {'text': message}
@@ -57,7 +63,8 @@ class FacebookNotificationService(BaseNotificationService):
             if 'filepath' in data:
                 file_path = data.pop('filepath')
                 file_type, _ = mimetypes.guess_type(file_path)
-                body['filedata'] =  '@{};type={}'.format(file_path, file_type)
+                # body['filedata'] =  '@{};type={}'.format(file_path, file_type)
+                body['filedata'] = (os.path.basename(file_path), open(file_path, 'rb'), file_type)
 
             body['message'] = data
 
@@ -77,21 +84,42 @@ class FacebookNotificationService(BaseNotificationService):
 
             body['recipient'] = recipient
 
+            _LOGGER.warn('body: {}'.format(body))
+
             if 'filedata' in body:
-                headers = None
-                post_data = {
+                file_data = {
                     'recipient': json.dumps(body['recipient']),
                     'message': json.dumps(body['message']),
                     'filedata': body['filedata']
                 }
-            else:
-                headers = headers={CONTENT_TYPE: CONTENT_TYPE_JSON}
-                post_data = json.dumps(body)
 
-            resp = requests.post(BASE_URL, data=post_data,
-                                 params=payload,
-                                 headers=headers,
-                                 timeout=10)
+                # multipart encode the entire payload
+                multipart_data = MultipartEncoder(file_data)
+
+                # multipart header from multipart_data
+                multipart_header = {
+                    'Content-Type': multipart_data.content_type
+                }
+
+                _LOGGER.warn("postin filedata: {}".format(multipart_data))
+
+                resp = requests.post(
+                    BASE_URL,
+                    data=multipart_data,
+                    params=params,
+                    headers=multipart_header,
+                    timeout=TIMEOUT
+                    # files=file_data,  # Multipart
+                )
+            else:
+                _LOGGER.warn("postin regular stuffs")
+                resp = requests.post(
+                    BASE_URL,
+                    data=json.dumps(body),
+                    params=params,
+                    headers={CONTENT_TYPE: CONTENT_TYPE_JSON},
+                    timeout=TIMEOUT
+                )
 
             if resp.status_code != 200:
                 obj = resp.json()

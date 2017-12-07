@@ -1085,21 +1085,27 @@ class Config(object):
 
     def is_allowed_path(self, path: str) -> bool:
         """Check if the path is valid for access from outside."""
+        _LOGGER.warn("is_allowed_path: {}".format(path))
         assert path is not None
 
         parent = pathlib.Path(path).parent
+        _LOGGER.warn("is_allowed_path.parent: {}".format(parent))
         try:
             parent = parent.resolve()  # pylint: disable=no-member
         except (FileNotFoundError, RuntimeError, PermissionError):
+            _LOGGER.warn("is_allowed_path.error resolving!")
             return False
 
+        _LOGGER.warn("is_allowed_path.whitelist: {}".format(self.whitelist_external_dirs))
         for whitelisted_path in self.whitelist_external_dirs:
             try:
                 parent.relative_to(whitelisted_path)
                 return True
             except ValueError:
+                _LOGGER.warn("is_allowed_path.ValueError")
                 pass
 
+        _LOGGER.warn("is_allowed_path.nothin matched")
         return False
 
     def as_dict(self):

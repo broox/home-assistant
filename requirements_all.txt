@@ -265,6 +265,9 @@ fixerio==0.1.1
 # homeassistant.components.light.flux_led
 flux_led==0.20
 
+# homeassistant.components.notify.facebook
+requests-toolbelt==0.8.0
+
 # homeassistant.components.notify.free_mobile
 freesms==0.1.2
 
